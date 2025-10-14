@@ -4,8 +4,13 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.SoundPool
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.gun_app_kotlin.R // Important: Import your R file
+import com.example.gun_app_kotlin.R
+import com.example.gun_app_kotlin.data.AppDatabase
+import com.example.gun_app_kotlin.data.LinenItem
+import com.example.gun_app_kotlin.data.LinenRepository
+import com.example.gun_app_kotlin.network.ApiClient
 import com.rscja.deviceapi.RFIDWithUHFUART
 import com.rscja.deviceapi.entity.UHFTAGInfo
 import com.rscja.deviceapi.exception.ConfigurationException
@@ -15,60 +20,56 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Data class to hold the state of our UI
-data class ScanScreenState(
-    val uniqueTags: Map<String, UHFTAGInfo> = emptyMap(),
-    val isScanning: Boolean = false,
-    val totalReads: Int = 0
+// Data classes EnrichedLinenTag and ScanScreenState remain the same
+data class EnrichedLinenTag(
+    val uhfTagInfo: UHFTAGInfo,
+    val linenItem: LinenItem?
 )
 
-class ScanViewModel : ViewModel() {
+data class ScanScreenState(
+    val scannedItems: Map<String, EnrichedLinenTag> = emptyMap(),
+    val isScanning: Boolean = false,
+    val totalReads: Int = 0,
+    val isSyncing: Boolean = false // To show a sync progress indicator
+)
+
+// The ViewModel now takes the repository as a parameter
+class ScanViewModel(private val linenRepository: LinenRepository) : ViewModel() {
 
     private lateinit var rfidReader: RFIDWithUHFUART
-
-    // --- SOUND START: Add SoundPool variables ---
     private var soundPool: SoundPool? = null
     private var soundId: Int = 0
     private var audioManager: AudioManager? = null
-    // --- SOUND END ---
 
-
-    // Private mutable state flow that can be updated from the ViewModel
     private val _uiState = MutableStateFlow(ScanScreenState())
-    // Public immutable state flow that the UI can observe
     val uiState = _uiState.asStateFlow()
 
-    // Function to initialize the RFID reader
+    init {
+        // Automatically sync data when the ViewModel is first created.
+        // This ensures the local database has fresh data when the app starts.
+        syncData()
+    }
+
+    // Public function to trigger a data sync from the UI
+    fun syncData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isSyncing = true) }
+            linenRepository.refreshLinens()
+            _uiState.update { it.copy(isSyncing = false) }
+        }
+    }
+
     fun init(context: Context) {
         try {
             rfidReader = RFIDWithUHFUART.getInstance()
-            viewModelScope.launch(Dispatchers.IO) { // Run initialization in the background
+            viewModelScope.launch(Dispatchers.IO) {
                 rfidReader.init(context)
             }
-            // --- SOUND START: Initialize SoundPool here ---
             initSound(context)
-            // --- SOUND END ---
         } catch (e: ConfigurationException) {
             e.printStackTrace()
         }
     }
-
-    // --- SOUND START: Create the initSound function ---
-    private fun initSound(context: Context) {
-        soundPool = SoundPool(10, AudioManager.STREAM_MUSIC, 5)
-        soundId = soundPool?.load(context, R.raw.barcodebeep, 1) ?: 0
-        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
-    // --- SOUND END ---
-
-    // --- SOUND START: Create a function to play the sound ---
-    private fun playSound() {
-        val audioMaxVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f
-        val audioCurrentVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f
-        val volumeRatio = audioCurrentVolume / audioMaxVolume
-        soundPool?.play(soundId, volumeRatio, volumeRatio, 1, 0, 1f)
-    }
-    // --- SOUND END ---
 
     fun toggleScan() {
         if (_uiState.value.isScanning) {
@@ -79,33 +80,51 @@ class ScanViewModel : ViewModel() {
     }
 
     private fun startScan() {
-        // Clear previous data
-        _uiState.update { it.copy(uniqueTags = emptyMap(), totalReads = 0) }
+        // Clear previous scan data before starting a new session
+        _uiState.update { it.copy(scannedItems = emptyMap(), totalReads = 0) }
 
-        // This callback is the heart of the scanning process.
-        // It runs on a background thread every time a tag is detected.
+        // This callback is fired by the hardware for every tag it sees
         rfidReader.setInventoryCallback { tagInfo ->
-            // --- SOUND START: Play sound on every successful read ---
             playSound()
-            // --- SOUND END ---
 
-            // Use update to safely modify the state
-            _uiState.update { currentState ->
-                val existingTag = currentState.uniqueTags[tagInfo.epc]
-                val newCount = (existingTag?.count ?: 0) + 1
-                val updatedTag = tagInfo.apply { count = newCount }
+            // Launch a coroutine to process the tag without blocking the hardware callback
+            viewModelScope.launch(Dispatchers.IO) {
 
-                currentState.copy(
-                    uniqueTags = currentState.uniqueTags + (tagInfo.epc to updatedTag),
-                    totalReads = currentState.totalReads + 1
+                // Get the current state once to work with it
+                val currentState = _uiState.value
+                val epc = tagInfo.epc
+                val existingEnrichedTag = currentState.scannedItems[epc]
+
+                // 1. Look up the linen data from the repository (which queries Room)
+                //    We only do this once per unique tag to be efficient.
+                val linenData = existingEnrichedTag?.linenItem ?: linenRepository.findLinenByEpc(epc)
+
+                // 2. Determine the new total count for this tag
+                val newCount = (existingEnrichedTag?.uhfTagInfo?.count ?: 0) + 1
+                tagInfo.count = newCount
+
+                // 3. Create the new/updated enriched object containing both scan and DB info
+                val newEnrichedTag = EnrichedLinenTag(
+                    uhfTagInfo = tagInfo,
+                    linenItem = linenData
                 )
+
+                // 4. Update the UI state with the new information
+                _uiState.update { state ->
+                    state.copy(
+                        scannedItems = state.scannedItems + (epc to newEnrichedTag),
+                        totalReads = state.totalReads + 1
+                    )
+                }
             }
         }
 
-        // Start the hardware scan
+        // This part correctly starts the hardware scanner
         viewModelScope.launch(Dispatchers.IO) {
             if (rfidReader.startInventoryTag()) {
                 _uiState.update { it.copy(isScanning = true) }
+            } else {
+                // Optional: Handle case where scanner fails to start
             }
         }
     }
@@ -117,15 +136,46 @@ class ScanViewModel : ViewModel() {
         }
     }
 
-    // This method is called when the screen is destroyed
+    private fun initSound(context: Context) {
+        soundPool = SoundPool(10, AudioManager.STREAM_MUSIC, 5)
+        soundId = soundPool?.load(context, R.raw.barcodebeep, 1) ?: 0
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
+    private fun playSound() {
+        val audioMaxVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f
+        val audioCurrentVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f
+        val volumeRatio = audioCurrentVolume / audioMaxVolume
+        soundPool?.play(soundId, volumeRatio, volumeRatio, 1, 0, 1f)
+    }
+
     override fun onCleared() {
         super.onCleared()
         if (::rfidReader.isInitialized) {
             rfidReader.free()
         }
-        // --- SOUND START: Release SoundPool resources ---
         soundPool?.release()
         soundPool = null
-        // --- SOUND END ---
+    }
+}
+
+
+/**
+ * NEW: ViewModel Factory
+ * This is crucial. It tells the system how to create a ScanViewModel since it now
+ * has a constructor parameter (the repository).
+ */
+class ScanViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ScanViewModel::class.java)) {
+            // This is where we build the real repository instance
+            val repository = LinenRepository(
+                linenDao = AppDatabase.getDatabase(context).linenDao(),
+                apiService = ApiClient.apiService
+            )
+            @Suppress("UNCHECKED_CAST")
+            return ScanViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

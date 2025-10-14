@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -22,13 +23,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.gun_app_kotlin.data.LinenItem
 import com.example.gun_app_kotlin.ui.theme.GunAppTheme
 import com.rscja.deviceapi.entity.UHFTAGInfo
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SecondScreen(
-    scanViewModel: ScanViewModel = viewModel()
+    // MODIFIED: Use the factory to create the ViewModel
+    scanViewModel: ScanViewModel = viewModel(factory = ScanViewModelFactory(LocalContext.current.applicationContext))
 ) {
     val context = LocalContext.current
     val uiState by scanViewModel.uiState.collectAsState()
@@ -60,34 +63,103 @@ fun SecondScreen(
                 false
             }
     ) {
-        // --- MODIFIED: The status header is now a modern Card ---
         ScanStatusHeader(
             isScanning = uiState.isScanning,
-            uniqueCount = uiState.uniqueTags.size,
+            uniqueCount = uiState.scannedItems.size, // MODIFIED
             totalReads = uiState.totalReads
         )
 
-        TableHeader()
+        TableHeader() // MODIFIED
 
-        // --- NEW: Show a message when the list is empty ---
-        if (uiState.uniqueTags.isEmpty()) {
+        if (uiState.scannedItems.isEmpty()) { // MODIFIED
             EmptyState()
         } else {
-            // Display the list of scanned tags
             LazyColumn {
+                // MODIFIED: Use the new `scannedItems` state object
                 items(
-                    items = uiState.uniqueTags.values.toList().sortedByDescending { it.count },
-                    key = { tag -> tag.epc }
-                ) { tag ->
-                    ListItemView(tagInfo = tag)
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    items = uiState.scannedItems.values.toList().sortedByDescending { it.uhfTagInfo.count },
+                    key = { enrichedTag -> enrichedTag.uhfTagInfo.epc }
+                ) { enrichedTag ->
+                    ListItemView(enrichedTag = enrichedTag) // MODIFIED
+                    HorizontalDivider(
+                        Modifier,
+                        DividerDefaults.Thickness,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    )
                 }
             }
         }
     }
 }
 
-// --- MODIFIED: ScanStatusHeader is now a Card with a progress indicator ---
+// --- MODIFIED: TableHeader now shows linen-specific columns ---
+@Composable
+fun TableHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "Linen Type", modifier = Modifier.weight(3f), fontWeight = FontWeight.Bold)
+        Text(text = "Status", modifier = Modifier.weight(3f), fontWeight = FontWeight.Bold)
+        Text(text = "Count", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(text = "RSSI", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    }
+}
+
+// --- MODIFIED: ListItemView now displays the rich `EnrichedLinenTag` data ---
+@Composable
+fun ListItemView(enrichedTag: EnrichedLinenTag) {
+    val linenFound = enrichedTag.linenItem != null
+    // If linen is found in DB, show its type. Otherwise, show "Unknown Tag".
+    val linenType = enrichedTag.linenItem?.linenType ?: "Unknown Tag"
+    // If linen is found, show its status. Otherwise, show the raw EPC.
+    val statusOrEpc = enrichedTag.linenItem?.status ?: enrichedTag.uhfTagInfo.epc
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Linen Type Column - shows in red if not found in the database
+        Text(
+            text = linenType,
+            modifier = Modifier.weight(3f),
+            color = if (linenFound) LocalContentColor.current else Color.Red,
+            fontWeight = if (linenFound) FontWeight.Normal else FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        // Status (or EPC) Column
+        Text(
+            text = statusOrEpc,
+            modifier = Modifier.weight(3f),
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalContentColor.current.copy(alpha = 0.7f), // Slightly dimmed
+            maxLines = 2
+        )
+        // Count Column
+        Text(
+            text = "x${enrichedTag.uhfTagInfo.count}",
+            modifier = Modifier.weight(1.5f),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        // RSSI Column
+        Text(
+            text = enrichedTag.uhfTagInfo.rssi,
+            modifier = Modifier.weight(1.5f),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+
+// --- UNCHANGED: These helper composables remain the same ---
+
 @Composable
 fun ScanStatusHeader(isScanning: Boolean, uniqueCount: Int, totalReads: Int) {
     Card(
@@ -106,7 +178,6 @@ fun ScanStatusHeader(isScanning: Boolean, uniqueCount: Int, totalReads: Int) {
                 StatusItem(label = "Unique Tags", value = uniqueCount.toString())
                 StatusItem(label = "Total Reads", value = totalReads.toString())
             }
-            // --- NEW: Animated progress bar for scanning state ---
             AnimatedVisibility(visible = isScanning) {
                 LinearProgressIndicator(
                     modifier = Modifier
@@ -118,7 +189,6 @@ fun ScanStatusHeader(isScanning: Boolean, uniqueCount: Int, totalReads: Int) {
     }
 }
 
-// --- NEW: Helper composable for status items ---
 @Composable
 fun StatusItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,38 +197,6 @@ fun StatusItem(label: String, value: String) {
     }
 }
 
-
-// --- MODIFIED: TableHeader uses MaterialTheme colors ---
-@Composable
-fun TableHeader() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant) // Use a theme color
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(text = "EPC", modifier = Modifier.weight(5f), fontWeight = FontWeight.Bold)
-        Text(text = "Count", modifier = Modifier.weight(2f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Text(text = "RSSI", modifier = Modifier.weight(2f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-    }
-}
-
-// --- MODIFIED: ListItemView has better spacing and alignment ---
-@Composable
-fun ListItemView(tagInfo: UHFTAGInfo) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = tagInfo.epc, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(5f), maxLines = 2)
-        Text(text = "x${tagInfo.count}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
-        Text(text = tagInfo.rssi, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(2f), textAlign = TextAlign.Center)
-    }
-}
-
-// --- NEW: Composable for the empty state ---
 @Composable
 fun EmptyState() {
     Box(
@@ -176,37 +214,26 @@ fun EmptyState() {
     }
 }
 
-
+// --- Preview needs to be updated to work with the new data structure ---
 @Preview(showBackground = true)
 @Composable
 fun SecondScreenPreview() {
     GunAppTheme {
+        val knownTag = EnrichedLinenTag(
+            uhfTagInfo = UHFTAGInfo().apply { epc = "E280116060000206122C1A20"; count = 12; rssi = "-55" },
+            linenItem = LinenItem("E280116060000206122C1A20", "Pillowcase", "In Stock", "")
+        )
+        val unknownTag = EnrichedLinenTag(
+            uhfTagInfo = UHFTAGInfo().apply { epc = "UNKNOWN_EPC_12345"; count = 3; rssi = "-62" },
+            linenItem = null // This tag was not found in the database
+        )
+
         Column(Modifier.background(MaterialTheme.colorScheme.background)) {
             ScanStatusHeader(isScanning = true, uniqueCount = 2, totalReads = 15)
             TableHeader()
-            ListItemView(tagInfo = UHFTAGInfo().apply {
-                epc = "E280116060000206122C1A20"
-                count = 12
-                rssi = "-55"
-            })
-            Divider()
-            ListItemView(tagInfo = UHFTAGInfo().apply {
-                epc = "300833B2DDD9014000000000"
-                count = 3
-                rssi = "-62"
-            })
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "Empty State Preview")
-@Composable
-fun SecondScreenEmptyPreview() {
-    GunAppTheme {
-        Column(Modifier.background(MaterialTheme.colorScheme.background)) {
-            ScanStatusHeader(isScanning = false, uniqueCount = 0, totalReads = 0)
-            TableHeader()
-            EmptyState()
+            ListItemView(enrichedTag = knownTag)
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+            ListItemView(enrichedTag = unknownTag)
         }
     }
 }
