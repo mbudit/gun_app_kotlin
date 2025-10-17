@@ -5,9 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [LinenItem::class], version = 1, exportSchema = false)
+@Database(entities = [LinenItem::class, BatchIn::class, BatchInDetail::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun linenDao(): LinenDao
+    abstract fun batchInDao(): BatchInDao
+    abstract fun batchInDetailDao(): BatchInDetailDao
 
     companion object {
         @Volatile
@@ -18,8 +20,12 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "linen_database"
-                ).build()
+                    "gun_app_database"
+                )
+                    // Since we changed the database schema (added tables), we need to handle migration.
+                    // For development, the simplest way is to destroy and rebuild the database.
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

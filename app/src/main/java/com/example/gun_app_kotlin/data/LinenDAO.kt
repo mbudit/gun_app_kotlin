@@ -4,11 +4,15 @@ import androidx.room.*
 
 @Dao
 interface LinenDao {
-    // Finds a single linen item by its EPC (LINEN_ID) from the local cache
+    // The column is now named 'epc', so we query it directly.
     @Query("SELECT * FROM linens WHERE epc = :epc")
     suspend fun findByEpc(epc: String): LinenItem?
 
-    // Inserts a list of linens, replacing any duplicates. This is for syncing.
+    // ... insertAll and clearAll are fine
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(linens: List<LinenItem>)
+
+    @Query("DELETE FROM linens")
+    suspend fun clearAll()
 }
+

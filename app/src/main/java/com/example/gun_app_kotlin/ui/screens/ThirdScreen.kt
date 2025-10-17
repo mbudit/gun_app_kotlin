@@ -8,10 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -23,26 +23,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun SecondScreen(
-    scanViewModel: ScanViewModel = viewModel(factory = ScanViewModelFactory(LocalContext.current.applicationContext))
-) {
+fun ThirdScreen(onNavigateUp: () -> Unit) {
+    val viewModel: ThirdScreenViewModel = viewModel(factory = ThirdScreenViewModelFactory(LocalContext.current.applicationContext))
     val context = LocalContext.current
-    val uiState by scanViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.showSaveSuccess) {
         if (uiState.showSaveSuccess) {
-            snackbarHostState.showSnackbar(
-                message = "Data successfully saved to database!",
-                duration = SnackbarDuration.Short
-            )
-            scanViewModel.onSaveSuccessAcknowledged()
+            snackbarHostState.showSnackbar("Status updated successfully!")
+            viewModel.onSaveSuccessAcknowledged()
         }
     }
 
     DisposableEffect(Unit) {
-        scanViewModel.init(context)
+        viewModel.init(context)
         onDispose {}
     }
 
@@ -51,6 +47,16 @@ fun SecondScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Linen Keluar") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Navigate back")
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
@@ -64,29 +70,37 @@ fun SecondScreen(
                         event.nativeKeyEvent.keyCode in listOf(139, 280, 291, 293, 294)
                     ) {
                         focusRequester.requestFocus()
-                        scanViewModel.toggleScan()
+                        viewModel.toggleScan()
                         return@onKeyEvent true
                     }
                     false
                 }
         ) {
-            // These composables are now correctly called from the single
-            // definitions in SharedComposables.kt
+            // These functions are now called from SharedComposables.kt
             BatchScanHeader(
                 isScanning = uiState.isScanning,
                 uniqueCount = uiState.scannedTags.size
             )
 
-            StorageLocationDropdown(
-                selectedLocation = uiState.selectedLocation,
-                onLocationSelected = { scanViewModel.onLocationSelected(it) },
-                isEnabled = !uiState.isScanning
+            OutlinedTextField(
+                value = uiState.petugasName,
+                onValueChange = { viewModel.onPetugasNameChanged(it) },
+                label = { Text("Nama Petugas") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                singleLine = true,
+                enabled = !uiState.isScanning
             )
 
             BatchListHeader()
 
             if (uiState.scannedTags.isEmpty()) {
-                val message = if (uiState.isScanning) "Memindai tag..." else "Pilih lokasi gudang dan mulai scan untuk menambahkan tag."
+                val message = when {
+                    uiState.isScanning -> "Scanning for tags..."
+                    uiState.petugasName.isBlank() -> "Masukkan nama petugas untuk memulai."
+                    else -> "Tekan trigger untuk memulai scan."
+                }
                 EmptyState(message = message)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
@@ -101,57 +115,11 @@ fun SecondScreen(
             }
 
             SaveButtonBottomBar(
-                onSave = { scanViewModel.saveScannedTags() },
-                onClear = { scanViewModel.clearScannedList() },
+                onSave = { viewModel.saveScannedTags() },
+                onClear = { viewModel.clearScannedList() },
                 isSaving = uiState.isSaving,
-                hasItems = uiState.scannedTags.isNotEmpty()
+                hasItems = uiState.scannedTags.isNotEmpty() && uiState.petugasName.isNotBlank()
             )
-        }
-    }
-}
-
-// This is the only composable that is unique to SecondScreen
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun StorageLocationDropdown(
-    selectedLocation: String,
-    onLocationSelected: (String) -> Unit,
-    isEnabled: Boolean
-) {
-    val options = listOf("Slow moving", "Fast moving")
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (isEnabled) expanded = !expanded },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        OutlinedTextField(
-            value = selectedLocation,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Lokasi gudang") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
-            enabled = isEnabled
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { selectionOption ->
-                DropdownMenuItem(
-                    text = { Text(selectionOption) },
-                    onClick = {
-                        onLocationSelected(selectionOption)
-                        expanded = false
-                    }
-                )
-            }
         }
     }
 }
