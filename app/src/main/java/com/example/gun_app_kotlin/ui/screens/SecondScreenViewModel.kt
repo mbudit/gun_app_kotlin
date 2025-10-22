@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class BatchUpdateState(
     val scannedTags: Map<String, EnrichedTag> = emptyMap(),
@@ -41,20 +44,40 @@ class ScanViewModel(private val linenRepository: LinenRepository) : ViewModel() 
         _uiState.update { it.copy(selectedLocation = newLocation) }
     }
 
+    // --- THIS IS THE MAIN CHANGE ---
     fun saveScannedTags() {
         viewModelScope.launch { // Launch on the main thread
             _uiState.update { it.copy(isSaving = true, showSaveSuccess = false) }
 
-            val epcsToUpdate = _uiState.value.scannedTags.keys.toList()
-            val location = _uiState.value.selectedLocation
+            // Get a snapshot of the scanned tags at this moment.
+            val tagsToSave = _uiState.value.scannedTags.values.toList()
 
-            if (epcsToUpdate.isNotEmpty()) {
-                // Perform all network/db operations on the IO thread
+            if (tagsToSave.isNotEmpty()) {
+                // Perform all grouping and network/db operations on the IO thread.
                 withContext(Dispatchers.IO) {
-                    linenRepository.updateStorageForTags(epcsToUpdate, location)
+
+                    // 1. Group the scanned EPCs by their associated 'batchId'.
+                    //    The result is a Map where:
+                    //    - Key = batch_in_id (e.g., "BI-20240101")
+                    //    - Value = List of EPCs belonging to that batch (e.g., ["epc1", "epc2"])
+                    val groupedByBatchId = tagsToSave
+                        .filter { it.batchId != null } // Only include tags that have a known batch ID.
+                        .groupBy(
+                            { it.batchId!! }, // The key is the batch ID.
+                            { it.epc }        // The value is the EPC string.
+                        )
+
+                    // 2. Loop through each group and call the stored procedure.
+                    groupedByBatchId.forEach { (batchId, epcsInBatch) ->
+                        // For each group, the `batchId` (which is the original batch_in_id)
+                        // becomes the `batch_out_id` for the stored procedure.
+                        linenRepository.batchOutItems(batchId, epcsInBatch)
+                    }
+
+                    // 3. After all server updates are done, refresh the local data.
                     linenRepository.refreshLinens()
                 }
-                // After IO work is done, update state back on the main thread
+                // After all IO work is finished, update the UI state back on the main thread.
                 _uiState.update { it.copy(scannedTags = emptyMap(), showSaveSuccess = true) }
             }
 

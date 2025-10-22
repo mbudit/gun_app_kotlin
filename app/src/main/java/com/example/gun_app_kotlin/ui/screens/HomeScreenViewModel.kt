@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// A simple state for the home screen
 data class HomeState(
     val isSyncing: Boolean = false
 )

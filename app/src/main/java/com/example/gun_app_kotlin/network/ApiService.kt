@@ -23,7 +23,37 @@ data class SetIntransitRequest(
     val petugas: String
 )
 
+data class BatchOutRequest(
+    @SerializedName("batch_out_id")
+    val batchOutId: String,
+    @SerializedName("epcs")
+    val epcs: List<String>
+)
+
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+data class LoginResponse(
+    val message: String,
+    val token: String // We'll use this later for securing other APIs
+)
+
+data class RegisterRequest(
+    val username: String,
+    val password: String
+)
+
+
 interface ApiService {
+
+    @POST("api/login")
+    suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @POST("api/register")
+    suspend fun register(@Body request: RegisterRequest)
+
     @GET("api/linens")
     suspend fun getAllLinens(): List<LinenItem>
 
@@ -38,4 +68,7 @@ interface ApiService {
 
     @GET("api/batch-in-details")
     suspend fun getBatchInDetails(): List<BatchInDetail>
+
+    @POST("api/batch-out")
+    suspend fun executeBatchOut(@Body request: BatchOutRequest)
 }
