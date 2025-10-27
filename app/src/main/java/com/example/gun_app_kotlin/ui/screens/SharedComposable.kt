@@ -16,23 +16,45 @@ import androidx.compose.ui.unit.dp
 // Universal composables  ---
 
 @Composable
-fun BatchScanHeader(isScanning: Boolean, uniqueCount: Int) {
-    Card(
+fun BatchScanHeader(
+    isScanning: Boolean,
+    userName: String, // <-- ADD THIS PARAMETER
+    uniqueCount: Int
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatusItem(label = "Status", value = if (isScanning) "Scanning" else "Stopped")
-            StatusItem(label = "Tag Unik", value = uniqueCount.toString())
+            // Display the user's name if it's not empty
+            if (userName.isNotEmpty()) {
+                Text(
+                    text = "Petugas: $userName",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                // Fallback in case name is not available
+                Spacer(modifier = Modifier)
+            }
+
+            Text(
+                text = if (isScanning) "SCANNING..." else "IDLE",
+                color = if (isScanning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium
+            )
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Total Unique Tags: $uniqueCount",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -47,17 +69,36 @@ fun BatchListHeader() {
     ) {
         // Adjust the weights to make space for the new column
         Text(text = "Linen Type", modifier = Modifier.weight(2.5f), fontWeight = FontWeight.Bold)
-        Text(text = "Batch ID", modifier = Modifier.weight(2.5f), fontWeight = FontWeight.Bold) // <-- NEW HEADER
-        Text(text = "Status", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
+        Text(text = "Batch ID", modifier = Modifier.weight(2.5f), fontWeight = FontWeight.Bold)
+//      Text(text = "Status", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
         Text(text = "Count", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-fun BatchListItem(tag: EnrichedTag) {
+fun BatchListHeaderThirdScreen() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Adjust the weights to make space for the new column
+        Text(text = "Linen Type", modifier = Modifier.weight(2.5f), fontWeight = FontWeight.Bold)
+//      Text(text = "Batch ID", modifier = Modifier.weight(2.5f), fontWeight = FontWeight.Bold)
+//      Text(text = "Status", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
+        Text(text = "Count", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+fun BatchListItem(
+    tag: EnrichedTag,
+    showBatchId: Boolean = true
+) {
     val linenType = tag.linenItem?.linenType ?: "Unknown Tag"
-    val status = tag.linenItem?.status ?: "N/A"
-    val batchId = tag.batchId ?: "N/A" // <-- GET THE BATCH ID
+    val batchId = tag.batchId ?: "N/A"
     val isUnknown = tag.linenItem == null
 
     Row(
@@ -73,18 +114,17 @@ fun BatchListItem(tag: EnrichedTag) {
             color = if (isUnknown) Color.Red else LocalContentColor.current,
             fontWeight = if (isUnknown) FontWeight.Bold else FontWeight.Normal
         )
-        // --- ADD THE BATCH ID TEXT ---
-        Text(
-            text = batchId,
-            modifier = Modifier.weight(2.5f),
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = status,
-            modifier = Modifier.weight(1.5f),
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalContentColor.current.copy(alpha = 0.7f)
-        )
+
+        // --- 2. CONDITIONALLY SHOW THE BATCH ID ---
+        if (showBatchId) {
+            Text(
+                text = batchId,
+                modifier = Modifier.weight(2.5f),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        // ------------------------------------------
+
         Text(
             text = "x${tag.count}",
             modifier = Modifier.weight(1f),
@@ -92,6 +132,7 @@ fun BatchListItem(tag: EnrichedTag) {
         )
     }
 }
+
 
 @Composable
 fun SaveButtonBottomBar(onSave: () -> Unit, onClear: () -> Unit, isSaving: Boolean, hasItems: Boolean) {

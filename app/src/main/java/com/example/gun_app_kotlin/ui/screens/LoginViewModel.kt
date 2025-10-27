@@ -18,7 +18,7 @@ data class LoginUiState(
     val loginSuccess: Boolean = false
 )
 
-class LoginViewModel(private val repository: LinenRepository) : ViewModel() {
+class LoginViewModel(private val repository: LinenRepository, private val sessionViewModel: SessionViewModel) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState = _uiState.asStateFlow()
@@ -38,9 +38,15 @@ class LoginViewModel(private val repository: LinenRepository) : ViewModel() {
                 username = _uiState.value.username,
                 password = _uiState.value.password
             )
-            result.onSuccess {
-                // In a real app, you would save the received token here
+
+            result.onSuccess { response -> // The result is now a LoginResponse
+                // --- THIS IS THE KEY CHANGE ---
+                // Save the user data to the shared SessionViewModel
+                sessionViewModel.onLoginSuccess(response.user)
+                // -----------------------------
+
                 _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+
             }.onFailure { exception ->
                 _uiState.update { it.copy(isLoading = false, loginError = "Invalid username or password.") }
             }
@@ -48,15 +54,17 @@ class LoginViewModel(private val repository: LinenRepository) : ViewModel() {
     }
 }
 
-class LoginViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+class LoginViewModelFactory(
+    private val context: Context,
+    private val sessionViewModel: SessionViewModel // <-- ADD THIS
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
             val db = AppDatabase.getDatabase(context)
-            val repository = LinenRepository(
-                db.linenDao(), db.batchInDao(), db.batchInDetailDao(), ApiClient.apiService
-            )
+            val repository = LinenRepository(db.linenDao(), db.batchInDao(), db.batchInDetailDao(), ApiClient.apiService, db.batchUsageDao(), db.batchUsageDetailDao())
             @Suppress("UNCHECKED_CAST")
-            return LoginViewModel(repository) as T
+            // Pass the sessionViewModel to the LoginViewModel constructor
+            return LoginViewModel(repository, sessionViewModel) as T // <-- UPDATE THIS
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -24,12 +26,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SecondScreen(
+    onNavigateUp: () -> Unit,
+    sessionViewModel: SessionViewModel = viewModel(),
     scanViewModel: ScanViewModel = viewModel(factory = ScanViewModelFactory(LocalContext.current.applicationContext))
 ) {
     val context = LocalContext.current
     val uiState by scanViewModel.uiState.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val snackbarHostState = remember { SnackbarHostState() }
+    val sessionState by sessionViewModel.uiState.collectAsState()
+    val userName = sessionState.currentUser?.name ?: ""
 
     LaunchedEffect(uiState.showSaveSuccess) {
         if (uiState.showSaveSuccess) {
@@ -51,6 +57,20 @@ fun SecondScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Masuk Gudang") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Navigate back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
@@ -70,12 +90,12 @@ fun SecondScreen(
                     false
                 }
         ) {
-            // These composables are now correctly called from the single
-            // definitions in SharedComposables.kt
             BatchScanHeader(
                 isScanning = uiState.isScanning,
+                userName = userName, // <-- Pass the name here
                 uniqueCount = uiState.scannedTags.size
             )
+
 
             StorageLocationDropdown(
                 selectedLocation = uiState.selectedLocation,
@@ -101,7 +121,7 @@ fun SecondScreen(
             }
 
             SaveButtonBottomBar(
-                onSave = { scanViewModel.saveScannedTags() },
+                onSave = { scanViewModel.saveScannedTags(userName) }, // <-- Pass the userName here
                 onClear = { scanViewModel.clearScannedList() },
                 isSaving = uiState.isSaving,
                 hasItems = uiState.scannedTags.isNotEmpty()
@@ -118,7 +138,7 @@ fun StorageLocationDropdown(
     onLocationSelected: (String) -> Unit,
     isEnabled: Boolean
 ) {
-    val options = listOf("Slow moving", "Fast moving")
+    val options = listOf("Slow", "Fast")
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(

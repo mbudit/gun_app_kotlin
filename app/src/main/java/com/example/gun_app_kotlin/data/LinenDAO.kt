@@ -14,5 +14,8 @@ interface LinenDao {
 
     @Query("DELETE FROM linens")
     suspend fun clearAll()
+
+    @Query("SELECT * FROM linens")
+    fun getAllLinens(): kotlinx.coroutines.flow.Flow<List<LinenItem>>
 }
 

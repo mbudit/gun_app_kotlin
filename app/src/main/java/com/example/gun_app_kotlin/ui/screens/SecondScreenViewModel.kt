@@ -26,7 +26,7 @@ import java.util.Locale
 data class BatchUpdateState(
     val scannedTags: Map<String, EnrichedTag> = emptyMap(),
     val isScanning: Boolean = false,
-    val selectedLocation: String = "Slow moving",
+    val selectedLocation: String = "Slow",
     val isSaving: Boolean = false,
     val showSaveSuccess: Boolean = false
 )
@@ -44,43 +44,35 @@ class ScanViewModel(private val linenRepository: LinenRepository) : ViewModel() 
         _uiState.update { it.copy(selectedLocation = newLocation) }
     }
 
-    // --- THIS IS THE MAIN CHANGE ---
-    fun saveScannedTags() {
-        viewModelScope.launch { // Launch on the main thread
+    fun saveScannedTags(petugasName: String) {
+        viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, showSaveSuccess = false) }
 
-            // Get a snapshot of the scanned tags at this moment.
-            val tagsToSave = _uiState.value.scannedTags.values.toList()
+            val currentState = _uiState.value
+            val tagsToSave = currentState.scannedTags.values.toList()
 
             if (tagsToSave.isNotEmpty()) {
-                // Perform all grouping and network/db operations on the IO thread.
                 withContext(Dispatchers.IO) {
-
-                    // 1. Group the scanned EPCs by their associated 'batchId'.
-                    //    The result is a Map where:
-                    //    - Key = batch_in_id (e.g., "BI-20240101")
-                    //    - Value = List of EPCs belonging to that batch (e.g., ["epc1", "epc2"])
                     val groupedByBatchId = tagsToSave
-                        .filter { it.batchId != null } // Only include tags that have a known batch ID.
+                        .filter { it.batchId != null }
                         .groupBy(
-                            { it.batchId!! }, // The key is the batch ID.
-                            { it.epc }        // The value is the EPC string.
+                            { it.batchId!! },
+                            { it.epc }
                         )
 
-                    // 2. Loop through each group and call the stored procedure.
+                    // 2. Loop through each group to call the repository
                     groupedByBatchId.forEach { (batchId, epcsInBatch) ->
-                        // For each group, the `batchId` (which is the original batch_in_id)
-                        // becomes the `batch_out_id` for the stored procedure.
-                        linenRepository.batchOutItems(batchId, epcsInBatch)
+                        linenRepository.batchOutItems(
+                            batchOutId = batchId,
+                            epcs = epcsInBatch,
+                            storageType = currentState.selectedLocation, // <-- 3. Get storageType from state
+                            petugasName = petugasName // <-- 4. Use the passed-in petugasName
+                        )
                     }
-
-                    // 3. After all server updates are done, refresh the local data.
                     linenRepository.refreshLinens()
                 }
-                // After all IO work is finished, update the UI state back on the main thread.
                 _uiState.update { it.copy(scannedTags = emptyMap(), showSaveSuccess = true) }
             }
-
             _uiState.update { it.copy(isSaving = false) }
         }
     }
@@ -182,11 +174,14 @@ class ScanViewModelFactory(private val context: Context) : ViewModelProvider.Fac
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ScanViewModel::class.java)) {
             val db = AppDatabase.getDatabase(context)
+            // --- UPDATE THIS LINE ---
             val repository = LinenRepository(
                 linenDao = db.linenDao(),
                 batchInDao = db.batchInDao(),
                 batchInDetailDao = db.batchInDetailDao(),
-                apiService = ApiClient.apiService
+                apiService = ApiClient.apiService,
+                batchUsageDao = db.batchUsageDao(),
+                batchUsageDetailDao = db.batchUsageDetailDao()
             )
             @Suppress("UNCHECKED_CAST")
             return ScanViewModel(repository) as T

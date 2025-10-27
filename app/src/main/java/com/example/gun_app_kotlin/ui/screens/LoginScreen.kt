@@ -18,7 +18,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
-    loginViewModel: LoginViewModel = viewModel(factory = LoginViewModelFactory(LocalContext.current.applicationContext))
+    // The error occurs because the call to LoginViewModelFactory is now incorrect.
+    // The next two lines are the fix.
+
+    // 1. Accept the sessionViewModel, getting it from the navigation graph
+    sessionViewModel: SessionViewModel = viewModel(),
+
+    // 2. Pass sessionViewModel into the factory
+    loginViewModel: LoginViewModel = viewModel(factory = LoginViewModelFactory(LocalContext.current.applicationContext, sessionViewModel))
 ) {
     val uiState by loginViewModel.uiState.collectAsState()
 
@@ -56,22 +63,30 @@ fun LoginScreen(
             Spacer(Modifier.height(48.dp))
 
             // --- Form Card ---
-            Column() {
-                AuthTextField(
-                    value = uiState.username,
-                    onValueChange = loginViewModel::onUsernameChange,
-                    label = "Username",
-                    leadingIcon = Icons.Default.Person
-                )
-                Spacer(Modifier.height(16.dp))
-                AuthTextField(
-                    value = uiState.password,
-                    onValueChange = loginViewModel::onPasswordChange,
-                    label = "Password",
-                    leadingIcon = Icons.Default.Lock,
-                    isPasswordToggle = true
-                )
+            // This was missing the Card wrapper from our previous step. I've re-added it.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    AuthTextField(
+                        value = uiState.username,
+                        onValueChange = loginViewModel::onUsernameChange,
+                        label = "Username",
+                        leadingIcon = Icons.Default.Person
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    AuthTextField(
+                        value = uiState.password,
+                        onValueChange = loginViewModel::onPasswordChange,
+                        label = "Password",
+                        leadingIcon = Icons.Default.Lock,
+                        isPasswordToggle = true
+                    )
+                }
             }
+
 
             Spacer(Modifier.height(24.dp))
 
@@ -112,3 +127,4 @@ fun LoginScreen(
         }
     }
 }
+

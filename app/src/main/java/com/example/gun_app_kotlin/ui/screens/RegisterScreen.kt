@@ -3,6 +3,7 @@ package com.example.gun_app_kotlin.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -55,6 +56,13 @@ fun RegisterScreen(
         ) {
             // --- Form Card ---
             Column() {
+                AuthTextField(
+                    value = uiState.name,
+                    onValueChange = registerViewModel::onNameChange,
+                    label = "Full Name",
+                    leadingIcon = Icons.Default.Badge // Using a 'badge' icon for name
+                )
+                Spacer(Modifier.height(16.dp))
                 AuthTextField(
                     value = uiState.username,
                     onValueChange = registerViewModel::onUsernameChange,

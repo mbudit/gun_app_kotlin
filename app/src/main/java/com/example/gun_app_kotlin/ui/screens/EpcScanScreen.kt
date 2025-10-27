@@ -28,6 +28,7 @@ fun EpcScanScreen(onNavigateUp: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val focusRequester = remember { FocusRequester() }
 
+
     DisposableEffect(Unit) {
         viewModel.init(context)
         onDispose {}
@@ -84,7 +85,7 @@ fun EpcScanScreen(onNavigateUp: () -> Unit) {
                 }
         ) {
             // Header showing scan status and count
-            BatchScanHeader(isScanning = uiState.isScanning, uniqueCount = uiState.scannedEpcs.size)
+//            BatchScanHeader(isScanning = uiState.isScanning, uniqueCount = uiState.scannedEpcs.size)
 
             if (uiState.scannedEpcs.isEmpty()) {
                 val message = if (uiState.isScanning) "Memindai EPC..." else "Tekan trigger untuk memulai scan."

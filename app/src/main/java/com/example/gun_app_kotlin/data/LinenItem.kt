@@ -1,11 +1,7 @@
 package com.example.gun_app_kotlin.data
 
-import androidx.room.Dao
 import androidx.room.Entity
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
-import androidx.room.Query
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -21,6 +17,6 @@ data class LinenItem(
     @SerializedName("LINEN_TYPE")
     val linenType: String,
 
-    @SerializedName("LINEN_STATUS")
-    val status: String
+//    @SerializedName("LINEN_STATUS")
+//    val status: String
 )

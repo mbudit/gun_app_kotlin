@@ -18,9 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// State for the new screen
 data class EpcScanState(
-    val scannedEpcs: Set<String> = emptySet(), // Use a Set to automatically handle uniqueness
+    val scannedEpcs: Set<String> = emptySet(),
     val isScanning: Boolean = false
 )
 

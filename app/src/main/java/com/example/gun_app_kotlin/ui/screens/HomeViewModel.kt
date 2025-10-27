@@ -7,37 +7,52 @@ import androidx.lifecycle.viewModelScope
 import com.example.gun_app_kotlin.data.AppDatabase
 import com.example.gun_app_kotlin.data.LinenRepository
 import com.example.gun_app_kotlin.network.ApiClient
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow // <-- Import this
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow // <-- Import this
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class HomeState(
-    val isSyncing: Boolean = false
+    val isSyncing: Boolean = false,
+    val isClearing: Boolean = false
 )
 
-class HomeViewModel(private val linenRepository: LinenRepository) : ViewModel() {
+class HomeViewModel(private val repository: LinenRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeState())
     val uiState = _uiState.asStateFlow()
 
+    // --- ADD THIS SHARED FLOW FOR ONE-TIME EVENTS ---
+    private val _syncCompletedEvent = MutableSharedFlow<Unit>()
+    val syncCompletedEvent = _syncCompletedEvent.asSharedFlow()
+    // ------------------------------------------------
+
     fun syncData() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true) }
-            linenRepository.refreshLinens()
-            _uiState.update { it.copy(isSyncing = false) }
+            try {
+                repository.refreshLinens()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                // When sync is done (success or fail), update state AND send event
+                _uiState.update { it.copy(isSyncing = false) }
+                _syncCompletedEvent.emit(Unit) // <-- Emit event here
+            }
         }
     }
 
     fun clearData() {
-        viewModelScope.launch(Dispatchers.IO) {
-            linenRepository.clearCache()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isClearing = true) }
+            repository.clearCache()
+            _uiState.update { it.copy(isClearing = false) }
         }
     }
 }
 
-// A factory for our new HomeViewModel
 class HomeViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
@@ -46,7 +61,9 @@ class HomeViewModelFactory(private val context: Context) : ViewModelProvider.Fac
                 linenDao = db.linenDao(),
                 batchInDao = db.batchInDao(),
                 batchInDetailDao = db.batchInDetailDao(),
-                apiService = ApiClient.apiService
+                apiService = ApiClient.apiService,
+                batchUsageDao = db.batchUsageDao(),
+                batchUsageDetailDao = db.batchUsageDetailDao()
             )
             @Suppress("UNCHECKED_CAST")
             return HomeViewModel(repository) as T

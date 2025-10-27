@@ -7,19 +7,22 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -28,45 +31,82 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    sessionViewModel: SessionViewModel,
     navController: NavHostController,
+    onNavigateToSettings: () -> Unit,
     homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(LocalContext.current.applicationContext))
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
-
-    // 1. Create state for the drawer (open/closed) and a coroutine scope
-    //    to control its animations.
+    val sessionState by sessionViewModel.uiState.collectAsState()
+    val currentUser = sessionState.currentUser
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // 2. Use ModalNavigationDrawer, which provides the slide-in drawer behavior.
+    // --- EFFECT 1: START THE SYNC ON LOGIN ---
+    LaunchedEffect(sessionState.isJustLoggedIn) {
+        if (sessionState.isJustLoggedIn) {
+            // ONLY start the sync. Do NOT reset the flag here.
+            homeViewModel.syncData()
+        }
+    }
+
+    // --- EFFECT 2: LISTEN FOR SYNC COMPLETION ---
+    LaunchedEffect(Unit) {
+        homeViewModel.syncCompletedEvent.collect {
+            // When the HomeViewModel tells us it's done, reset the session flag.
+            sessionViewModel.onSyncCompleted()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            // --- START OF CHANGES ---
 
-            // 1. Use ModalDrawerSheet with a modifier to set the width to 50%
             ModalDrawerSheet(
-                modifier = Modifier.fillMaxWidth(0.5f) // Or choose a value like 0.6f if 50% is too small
+                modifier = Modifier.fillMaxWidth(0.7f) // Or choose a value like 0.6f if 50% is too small
             ) {
-                // 2. Use a Column to control the layout of items inside the drawer
                 Column(modifier = Modifier.fillMaxHeight()) {
-                    // You can add a header or other items here if you want
-                    Text(
-                        "User Menu",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    if (currentUser != null) {
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            Text(
+                                text = "Halo, ${currentUser.name}!",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                text = "@${currentUser.username}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Text(
+                            "User Menu",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
                     HorizontalDivider()
 
-                    // This spacer takes up all available vertical space, pushing the item below it to the bottom.
                     Spacer(Modifier.weight(1f))
 
-                    // 3. The Logout button is now at the bottom
+                    NavigationDrawerItem(
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                        label = { Text("Settings") },
+                        selected = false,
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onNavigateToSettings() // <-- CALL THE NAVIGATION ACTION
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+
                     NavigationDrawerItem(
                         icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout") },
                         label = { Text("Log Out") },
                         selected = false,
                         onClick = {
+                            // Also clear the session data on logout
+                            sessionViewModel.onLogout()
                             navController.navigate("login") {
                                 popUpTo(navController.graph.id) {
                                     inclusive = true
@@ -75,23 +115,16 @@ fun HomeScreen(
                         },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                     )
-
-                    // Add some padding at the very bottom
                     Spacer(Modifier.height(12.dp))
                 }
             }
-
-            // --- END OF CHANGES ---
         }
     ) {
-        // 4. Use Scaffold to easily place the TopAppBar (with the user icon)
-        //    and the main screen content.
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("RFID Scanner") },
                     navigationIcon = {
-                        // 5. This is the user icon button on the top left.
                         IconButton(onClick = {
                             scope.launch {
                                 drawerState.apply {
@@ -108,11 +141,10 @@ fun HomeScreen(
                 )
             }
         ) { innerPadding ->
-            // This is the original content of your HomeScreen.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding) // Use padding from the Scaffold
+                    .padding(innerPadding)
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -143,6 +175,41 @@ fun HomeScreen(
                         onClick = { navController.navigate("third_screen") },
                         isEnabled = !uiState.isSyncing
                     )
+
+                    Button(
+                        onClick = { navController.navigate("fourth_screen") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = !uiState.isSyncing,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) {
+                        // You can change the icon and text as needed
+                        Icon(Icons.Default.Check, "Serah Terima Icon", modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("Serah Terima")
+                    }
+
+                    Button(
+                        onClick = { navController.navigate("fifth_screen") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = !uiState.isSyncing,
+                        // Using different colors to make it stand out
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Default.AssignmentTurnedIn, "Fifth Screen Icon", modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("List Penerimaan Linen")
+                    }
+
                     Button(
                         onClick = { navController.navigate("epc_scan_screen") },
                         modifier = Modifier
@@ -189,30 +256,39 @@ fun InfoCard() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         shape = MaterialTheme.shapes.large
-    ) {
-        Column(
+    )
+    {
+        Row (
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = androidx . compose . ui . Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.AddCircle,
                 contentDescription = "Scanner Icon",
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.size(56.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Text(
-                text = "Alat Pemindai RFID",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = "Halo petugas laundry~!",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
-            )
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+
+                Text(
+                    text = "Alat Pemindai RFID",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "Halo petugas laundry~!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
+
     }
 }
 

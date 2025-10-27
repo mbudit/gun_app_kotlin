@@ -4,30 +4,44 @@ import com.google.gson.annotations.SerializedName
 import com.example.gun_app_kotlin.data.LinenItem
 import com.example.gun_app_kotlin.data.BatchIn
 import com.example.gun_app_kotlin.data.BatchInDetail
+import com.example.gun_app_kotlin.data.BatchUsage
+import com.example.gun_app_kotlin.data.BatchUsageDetail
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.GET
 
-data class UpdateStorageRequest(
+data class StorageOutRequest(
+    @SerializedName("epcs")
     val epcs: List<String>,
-    val location: String
-)
-
-data class UpdateStatusRequest(
-    val epcs: List<String>,
-    val status: String
-)
-
-data class SetIntransitRequest(
-    val epcs: List<String>,
-    val petugas: String
+    @SerializedName("petugas_name")
+    val petugasName: String
 )
 
 data class BatchOutRequest(
     @SerializedName("batch_out_id")
     val batchOutId: String,
+
     @SerializedName("epcs")
-    val epcs: List<String>
+    val epcs: List<String>,
+
+    @SerializedName("storage_type")
+    val storageType: String,
+
+    @SerializedName("petugas_name")
+    val petugasName: String
+)
+
+data class BatchUsageRequest(
+    @SerializedName("batch_usage_id")
+    val batchUsageId: String,
+    @SerializedName("epcs")
+    val epcs: List<String>,
+    @SerializedName("petugas_name")
+    val petugasName: String,
+    @SerializedName("receiver_name")
+    val receiverName: String,
+    @SerializedName("receiver_location")
+    val receiverLocation: String
 )
 
 data class LoginRequest(
@@ -37,12 +51,19 @@ data class LoginRequest(
 
 data class LoginResponse(
     val message: String,
-    val token: String // We'll use this later for securing other APIs
+    val token: String,
+    val user: User
 )
 
 data class RegisterRequest(
     val username: String,
-    val password: String
+    val password: String,
+    val name: String
+)
+
+data class User(
+    val username: String,
+    val name: String
 )
 
 
@@ -57,12 +78,6 @@ interface ApiService {
     @GET("api/linens")
     suspend fun getAllLinens(): List<LinenItem>
 
-    @POST("api/linens/update-storage")
-    suspend fun updateLinenStorage(@Body request: UpdateStorageRequest)
-
-    @POST("api/linens/set-intransit")
-    suspend fun setLinenIntransit(@Body request: SetIntransitRequest)
-
     @GET("api/batch-in")
     suspend fun getBatchIn(): List<BatchIn>
 
@@ -71,4 +86,19 @@ interface ApiService {
 
     @POST("api/batch-out")
     suspend fun executeBatchOut(@Body request: BatchOutRequest)
+
+    @POST("api/storage-out")
+    suspend fun executeStorageOut(@Body request: StorageOutRequest)
+
+    @GET("api/batch-usage")
+    suspend fun getBatchUsage(): List<BatchUsage>
+
+    @GET("api/batch-usage-details")
+    suspend fun getBatchUsageDetails(): List<BatchUsageDetail>
+
+    @POST("api/batch-usage")
+    suspend fun executeBatchUsage(@Body request: BatchUsageRequest)
+
+
+
 }

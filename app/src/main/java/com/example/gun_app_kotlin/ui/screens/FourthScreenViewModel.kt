@@ -3,12 +3,13 @@ package com.example.gun_app_kotlin.ui.screens
 import android.content.Context
 import android.media.AudioManager
 import android.media.SoundPool
+import androidx.compose.ui.text.intl.Locale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.gun_app_kotlin.R
 import com.example.gun_app_kotlin.data.AppDatabase
-import com.example.gun_app_kotlin.data.LinenItem
+import com.example.gun_app_kotlin.data.BatchIdManager
 import com.example.gun_app_kotlin.data.LinenRepository
 import com.example.gun_app_kotlin.network.ApiClient
 import com.rscja.deviceapi.RFIDWithUHFUART
@@ -19,52 +20,81 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.text.format
+import java.text.SimpleDateFormat
+import java.util.Date
 
-data class StatusUpdateState(
+// State specific to the Fourth Screen
+data class SerahTerimaState(
     val scannedTags: Map<String, EnrichedTag> = emptyMap(),
     val isScanning: Boolean = false,
     val petugasName: String = "",
+    val lokasiPenerima: String = "", // <-- ADD THIS
+    val namaPenerima: String = "",   // <-- ADD THIS
     val isSaving: Boolean = false,
     val showSaveSuccess: Boolean = false
 )
 
-class ThirdScreenViewModel(private val linenRepository: LinenRepository, initialPetugasName: String) : ViewModel() {
+
+class FourthScreenViewModel(
+    private val linenRepository: LinenRepository,
+    initialPetugasName: String,
+    private val batchIdManager: BatchIdManager
+) : ViewModel() {
 
     private lateinit var rfidReader: RFIDWithUHFUART
     private var soundPool: SoundPool? = null
     private var soundId: Int = 0
 
-    private val _uiState = MutableStateFlow(StatusUpdateState(petugasName = initialPetugasName))
+    private val _uiState = MutableStateFlow(SerahTerimaState(petugasName = initialPetugasName))
     val uiState = _uiState.asStateFlow()
 
-    fun onPetugasNameChanged(name: String) {
-        _uiState.update { it.copy(petugasName = name) }
+    fun onLokasiPenerimaChanged(lokasi: String) {
+        _uiState.update { it.copy(lokasiPenerima = lokasi) }
+    }
+
+    fun onNamaPenerimaChanged(nama: String) {
+        _uiState.update { it.copy(namaPenerima = nama) }
     }
 
     fun saveScannedTags() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, showSaveSuccess = false) }
+            val currentState = _uiState.value
 
-            val epcsToUpdate = _uiState.value.scannedTags.keys.toList()
-            val petugas = _uiState.value.petugasName
+            // Gather all required data
+            val epcsToUpdate = currentState.scannedTags.keys.toList()
+            val petugas = currentState.petugasName
+            val receiverName = currentState.namaPenerima
+            val receiverLocation = currentState.lokasiPenerima
 
-            withContext(Dispatchers.IO) {
-                if (epcsToUpdate.isNotEmpty() && petugas.isNotBlank()) {
-                    // --- THIS IS THE CHANGE ---
-                    // Call the new repository function instead of setIntransitForTags
-                    linenRepository.storageOutTags(epcsToUpdate, petugas)
-                    // --------------------------
+            // --- 2. GET THE NEXT UNIQUE BATCH ID FROM THE MANAGER ---
+            val newBatchId = batchIdManager.getNextBatchId()
 
-                    // Refresh local data from the server after the operation
-                    linenRepository.refreshLinens()
+            if (epcsToUpdate.isNotEmpty() && petugas.isNotBlank() && receiverName.isNotBlank() && receiverLocation.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        // 3. Call the repository function with the NEWLY generated ID
+                        linenRepository.createBatchUsage(
+                            batchUsageId = newBatchId, // <-- USE THE NEW ID
+                            epcs = epcsToUpdate,
+                            petugasName = petugas,
+                            receiverName = receiverName,
+                            receiverLocation = receiverLocation
+                        )
+                        linenRepository.refreshLinens()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
 
-            // After all IO work is done, update the UI state
+            // After all IO work is done, update the UI state and reset fields
             _uiState.update {
                 it.copy(
                     scannedTags = emptyMap(),
-                    // We removed the input field, so no need to clear petugasName
+                    lokasiPenerima = "",
+                    namaPenerima = "",
                     isSaving = false,
                     showSaveSuccess = true
                 )
@@ -99,18 +129,9 @@ class ThirdScreenViewModel(private val linenRepository: LinenRepository, initial
             viewModelScope.launch(Dispatchers.IO) {
                 _uiState.update { currentState ->
                     val existingTag = currentState.scannedTags[epc]
-
                     val linenData = existingTag?.linenItem ?: linenRepository.findLinenByEpc(epc)
-
                     val newCount = (existingTag?.count ?: 0) + 1
-
-                    val updatedTag = EnrichedTag(
-                        epc = epc,
-                        count = newCount,
-                        linenItem = linenData, // Storing the whole object is correct
-                        batchId = null
-                    )
-
+                    val updatedTag = EnrichedTag(epc = epc, count = newCount, linenItem = linenData, batchId = null)
                     currentState.copy(scannedTags = currentState.scannedTags + (epc to updatedTag))
                 }
             }
@@ -144,13 +165,12 @@ class ThirdScreenViewModel(private val linenRepository: LinenRepository, initial
     }
 }
 
-
-class ThirdScreenViewModelFactory(
+class FourthScreenViewModelFactory(
     private val context: Context,
     private val initialPetugasName: String
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ThirdScreenViewModel::class.java)) {
+        if (modelClass.isAssignableFrom(FourthScreenViewModel::class.java)) {
             val db = AppDatabase.getDatabase(context)
             // --- UPDATE THIS LINE ---
             val repository = LinenRepository(
@@ -161,8 +181,9 @@ class ThirdScreenViewModelFactory(
                 batchUsageDao = db.batchUsageDao(),
                 batchUsageDetailDao = db.batchUsageDetailDao()
             )
+            val batchIdManager = BatchIdManager(context.applicationContext)
             @Suppress("UNCHECKED_CAST")
-            return ThirdScreenViewModel(repository, initialPetugasName) as T
+            return FourthScreenViewModel(repository, initialPetugasName, batchIdManager) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
