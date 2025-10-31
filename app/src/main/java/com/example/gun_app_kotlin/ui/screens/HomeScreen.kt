@@ -230,11 +230,11 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        SyncDataButton(
-                            modifier = Modifier.weight(1f),
-                            onClick = { homeViewModel.syncData() },
-                            isEnabled = !uiState.isSyncing
-                        )
+//                        SyncDataButton(
+//                            modifier = Modifier.weight(1f),
+//                            onClick = { homeViewModel.syncData() },
+//                            isEnabled = !uiState.isSyncing
+//                        )
 
                         ClearDataButton(
                             modifier = Modifier.weight(1f),

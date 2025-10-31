@@ -31,16 +31,38 @@ import com.example.gun_app_kotlin.ui.screens.SessionViewModel
 import com.example.gun_app_kotlin.ui.screens.SettingsScreen
 import com.example.gun_app_kotlin.ui.screens.SixthScreen
 import kotlinx.coroutines.launch
+import com.example.gun_app_kotlin.data.AppDatabase
+import com.example.gun_app_kotlin.data.LinenRepository
+import com.example.gun_app_kotlin.network.ApiClient
+import com.example.gun_app_kotlin.network.WebSocketManager
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val db = AppDatabase.getDatabase(applicationContext)
+        val linenRepository = LinenRepository(
+            linenDao = db.linenDao(),
+            batchInDao = db.batchInDao(),
+            batchInDetailDao = db.batchInDetailDao(),
+            apiService = ApiClient.apiService,
+            batchUsageDao = db.batchUsageDao(),
+            batchUsageDetailDao = db.batchUsageDetailDao()
+        )
+        // Initialize the WebSocketManager once.
+        WebSocketManager.init(linenRepository)
+        // --- END: WebSocket Initialization ---
+
         setContent {
             GunAppTheme {
                 AppNavHost()
             }
         }
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up the connection when the app is fully closed
+        WebSocketManager.close()
     }
 }
 
