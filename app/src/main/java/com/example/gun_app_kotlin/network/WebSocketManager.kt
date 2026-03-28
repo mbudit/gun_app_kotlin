@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 object WebSocketManager {
     // Use the same IP and Port as your ApiClient, but with "ws://"
-    private const val WEBSOCKET_URL = "ws://100.108.196.112:5001"
+    private const val WEBSOCKET_URL = "ws://100.108.196.112:5010"
     private const val RECONNECT_INTERVAL_MS = 5000L // 5 seconds
 
     // --- DEBOUNCING LOGIC ---
