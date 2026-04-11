@@ -33,6 +33,7 @@ import com.example.gun_app_kotlin.ui.screens.SixthScreen
 import kotlinx.coroutines.launch
 import com.example.gun_app_kotlin.data.AppDatabase
 import com.example.gun_app_kotlin.data.LinenRepository
+import com.example.gun_app_kotlin.data.ServerConfigManager
 import com.example.gun_app_kotlin.network.ApiClient
 import com.example.gun_app_kotlin.network.WebSocketManager
 
@@ -40,6 +41,10 @@ import com.example.gun_app_kotlin.network.WebSocketManager
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Initialize server config first so ApiClient and WebSocket use the saved URL
+        ServerConfigManager.init(applicationContext)
+        ApiClient.updateBaseUrl()
+
         val db = AppDatabase.getDatabase(applicationContext)
         val linenRepository = LinenRepository(
             linenDao = db.linenDao(),

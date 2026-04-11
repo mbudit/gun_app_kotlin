@@ -4,20 +4,28 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.gun_app_kotlin.data.ServerConfigManager
+import com.example.gun_app_kotlin.network.ApiClient
+import com.example.gun_app_kotlin.network.WebSocketManager
 import com.rscja.deviceapi.RFIDWithUHFUART
-import com.rscja.deviceapi.exception.ConfigurationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 data class SettingsState(
-    // We start with a sensible default, the UI will update once power is read
+    // RFID Reader
     val currentPower: Int = 30,
     val isLoading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    // Server Config
+    val serverUrl: String = "",
+    val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
+    val isServerConfigExpanded: Boolean = true
 )
 
 class SettingsViewModel : ViewModel() {
@@ -28,7 +36,64 @@ class SettingsViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsState())
     val uiState = _uiState.asStateFlow()
 
-    // 1. INIT a` la `UHFSetFragment`
+    init {
+        // Load saved server URL and auto-check connection
+        _uiState.update { it.copy(serverUrl = ServerConfigManager.getServerUrl()) }
+        testConnection()
+    }
+
+    // ═══════════════════════════════════
+    // Server Configuration
+    // ═══════════════════════════════════
+
+    fun onServerUrlChange(url: String) {
+        _uiState.update { it.copy(serverUrl = url) }
+    }
+
+    fun toggleServerConfig() {
+        _uiState.update { it.copy(isServerConfigExpanded = !it.isServerConfigExpanded) }
+    }
+
+    fun applyServerUrl() {
+        val newUrl = _uiState.value.serverUrl.trim()
+        if (newUrl.isEmpty()) return
+
+        ServerConfigManager.setServerUrl(newUrl)
+        ApiClient.updateBaseUrl()
+        WebSocketManager.reconnectWithNewUrl()
+        testConnection()
+    }
+
+    fun testConnection() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(connectionStatus = ConnectionStatus.CHECKING) }
+            val isReachable = withContext(Dispatchers.IO) {
+                try {
+                    val url = URL("${ServerConfigManager.getHttpBaseUrl()}api/linens")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.connectTimeout = 3000
+                    conn.readTimeout = 3000
+                    conn.requestMethod = "GET"
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    code in 200..599
+                } catch (e: Exception) {
+                    false
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    connectionStatus = if (isReachable) ConnectionStatus.CONNECTED else ConnectionStatus.DISCONNECTED
+                )
+            }
+        }
+    }
+
+    // ═══════════════════════════════════
+    // RFID Reader Power Settings
+    // ═══════════════════════════════════
+
+    // 1. INIT à la `UHFSetFragment`
     fun init(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -76,16 +141,15 @@ class SettingsViewModel : ViewModel() {
                 // If setting power was successful, update our state to match
                 withContext(Dispatchers.Main) {
                     _uiState.update { it.copy(currentPower = power) }
-                    // Here you could emit an event to show a "Success" toast
                 }
             } else {
-                // If it fails, you could show an error toast
                 withContext(Dispatchers.Main) {
                     _uiState.update { it.copy(error = "Failed to set power.") }
                 }
             }
         }
     }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }

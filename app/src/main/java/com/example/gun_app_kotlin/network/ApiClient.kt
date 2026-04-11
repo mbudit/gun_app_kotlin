@@ -1,16 +1,33 @@
 package com.example.gun_app_kotlin.network
 
+import com.example.gun_app_kotlin.data.ServerConfigManager
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object ApiClient {
-    // IMPORTANT: Replace with your server's actual IP address or domain
-    private const val BASE_URL = "http://100.108.196.112:5010/"
 
-    private val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
+    @Volatile
+    private var retrofit: Retrofit? = null
 
-    val apiService: ApiService = retrofit.create(ApiService::class.java)
+    @Volatile
+    var apiService: ApiService = buildApiService(ServerConfigManager.getHttpBaseUrl())
+        private set
+
+    /**
+     * Rebuild ApiService with the current URL from ServerConfigManager.
+     * Call this after changing the server URL.
+     */
+    fun updateBaseUrl() {
+        val newBaseUrl = ServerConfigManager.getHttpBaseUrl()
+        apiService = buildApiService(newBaseUrl)
+    }
+
+    private fun buildApiService(baseUrl: String): ApiService {
+        val r = Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        retrofit = r
+        return r.create(ApiService::class.java)
+    }
 }

@@ -1,10 +1,11 @@
 package com.example.gun_app_kotlin.data
 
+import com.example.gun_app_kotlin.network.ApiClient
 import com.example.gun_app_kotlin.network.ApiService
 import com.example.gun_app_kotlin.network.BatchOutRequest
 import com.example.gun_app_kotlin.network.BatchUsageRequest
-import com.example.gun_app_kotlin.network.LoginRequest // Add import
-import com.example.gun_app_kotlin.network.LoginResponse // Add import
+import com.example.gun_app_kotlin.network.LoginRequest
+import com.example.gun_app_kotlin.network.LoginResponse
 import com.example.gun_app_kotlin.network.RegisterRequest
 import com.example.gun_app_kotlin.network.StorageOutRequest
 import java.io.IOException
@@ -14,10 +15,13 @@ class LinenRepository(
     private val linenDao: LinenDao,
     private val batchInDao: BatchInDao,
     private val batchInDetailDao: BatchInDetailDao,
-    private val apiService: ApiService,
+    @Suppress("UNUSED_PARAMETER") apiService: ApiService, // kept for caller compat; dynamic property below is used
     private val batchUsageDao: BatchUsageDao,
     private val batchUsageDetailDao: BatchUsageDetailDao
 ) {
+    // Always use the latest ApiService from ApiClient so URL changes take effect immediately
+    private val apiService: ApiService get() = ApiClient.apiService
+
     suspend fun loginUser(username: String, password: String): Result<LoginResponse> {
         return try {
             val request = LoginRequest(username, password)
@@ -30,15 +34,16 @@ class LinenRepository(
         }
     }
 
-    suspend fun registerUser(username: String, password: String, name: String): Result<Unit> {        return try {
-        // Pass the new 'name' field into the request
-        val request = RegisterRequest(username, password, name)
-        apiService.register(request)
-        Result.success(Unit)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        Result.failure(e)
-    }
+    suspend fun registerUser(username: String, password: String, name: String): Result<Unit> {
+        return try {
+            // Pass the new 'name' field into the request
+            val request = RegisterRequest(username, password, name)
+            apiService.register(request)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
     }
 
     // This is the ONLY function the ViewModel will call to get data.

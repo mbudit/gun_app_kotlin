@@ -2,7 +2,10 @@ package com.example.gun_app_kotlin.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -15,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,9 +70,53 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
+            // ═══════════════════════════════════
+            // Server Connection Section
+            // ═══════════════════════════════════
+            Text(
+                text = "SERVER",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            ServerConfigSection(
+                serverUrl = uiState.serverUrl,
+                connectionStatus = uiState.connectionStatus,
+                isExpanded = uiState.isServerConfigExpanded,
+                onToggleExpand = viewModel::toggleServerConfig,
+                onServerUrlChange = viewModel::onServerUrlChange,
+                onApply = viewModel::applyServerUrl,
+                onTestConnection = viewModel::testConnection
+            )
+
+            Spacer(Modifier.height(28.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(20.dp))
+
+            // ═══════════════════════════════════
+            // RFID Reader Section
+            // ═══════════════════════════════════
+            Text(
+                text = "RFID READER",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
             if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator()
                 }
             } else {
@@ -130,7 +178,7 @@ fun ReaderPowerSetting(
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // --- NEW ROW TO HOLD TEXTFIELD AND DISPLAY TEXT ---
+        // --- ROW TO HOLD TEXTFIELD AND DISPLAY TEXT ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -160,7 +208,6 @@ fun ReaderPowerSetting(
                 )
             }
         }
-        // ----------------------------------------------------
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -168,13 +215,6 @@ fun ReaderPowerSetting(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-//            OutlinedButton(
-//                onClick = onGetPowerClicked,
-//                modifier = Modifier.weight(1f)
-//            ) {
-//                Text("Get Power")
-//            }
-
             Button(
                 onClick = onSetPowerClicked,
                 modifier = Modifier.weight(1f)
