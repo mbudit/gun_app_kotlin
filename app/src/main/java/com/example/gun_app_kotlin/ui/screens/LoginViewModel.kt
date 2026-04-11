@@ -78,11 +78,14 @@ class LoginViewModel(
      * Test connectivity by making a quick HTTP request to the server.
      */
     fun testConnection() {
+        val urlToTest = _uiState.value.serverUrl.trim()
+        if (urlToTest.isEmpty()) return
+
         viewModelScope.launch {
             _uiState.update { it.copy(connectionStatus = ConnectionStatus.CHECKING) }
             val isReachable = withContext(Dispatchers.IO) {
                 try {
-                    val url = URL("${ServerConfigManager.getHttpBaseUrl()}api/linens")
+                    val url = URL("http://$urlToTest/api/linens")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.connectTimeout = 3000
                     conn.readTimeout = 3000
