@@ -82,12 +82,16 @@ class ScanViewModel(private val linenRepository: LinenRepository) : ViewModel() 
     }
 
     fun init(context: Context) {
-        try {
-            rfidReader = RFIDWithUHFUART.getInstance()
-            viewModelScope.launch(Dispatchers.IO) { rfidReader.init(context) }
-            initSound(context)
-        } catch (e: ConfigurationException) {
-            e.printStackTrace()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                rfidReader = RFIDWithUHFUART.getInstance()
+                rfidReader.init(context)
+                withContext(Dispatchers.Main) {
+                    initSound(context)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

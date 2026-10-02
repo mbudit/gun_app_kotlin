@@ -21,6 +21,7 @@ import com.example.gun_app_kotlin.ui.screens.HomeScreen
 import com.example.gun_app_kotlin.ui.screens.SecondScreen
 import com.example.gun_app_kotlin.ui.screens.ThirdScreen
 import com.example.gun_app_kotlin.ui.screens.EpcScanScreen
+import com.example.gun_app_kotlin.ui.screens.EpcRegisterScreen
 import com.example.gun_app_kotlin.ui.screens.FifthScreen
 import com.example.gun_app_kotlin.ui.screens.FourthScreen
 import com.example.gun_app_kotlin.ui.screens.LoginScreen
@@ -155,6 +156,12 @@ fun AppNavHost() {
             }
             composable("epc_scan_screen") {
                 EpcScanScreen(onNavigateUp = { navController.navigateUp() })
+            }
+            composable("epc_register_screen") {
+                EpcRegisterScreen(
+                    onNavigateUp = { navController.navigateUp() },
+                    sessionViewModel = sessionViewModel
+                )
             }
         }
     }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class EpcScanState(
     val scannedEpcs: Set<String> = emptySet(),
@@ -33,12 +34,16 @@ class EpcScanViewModel() : ViewModel() {
     val uiState = _uiState.asStateFlow()
 
     fun init(context: Context) {
-        try {
-            rfidReader = RFIDWithUHFUART.getInstance()
-            viewModelScope.launch(Dispatchers.IO) { rfidReader.init(context) }
-            initSound(context)
-        } catch (e: ConfigurationException) {
-            e.printStackTrace()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                rfidReader = RFIDWithUHFUART.getInstance()
+                rfidReader.init(context)
+                withContext(Dispatchers.Main) {
+                    initSound(context)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

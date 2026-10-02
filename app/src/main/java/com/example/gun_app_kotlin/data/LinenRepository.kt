@@ -4,6 +4,8 @@ import com.example.gun_app_kotlin.network.ApiClient
 import com.example.gun_app_kotlin.network.ApiService
 import com.example.gun_app_kotlin.network.BatchOutRequest
 import com.example.gun_app_kotlin.network.BatchUsageRequest
+import com.example.gun_app_kotlin.network.LinenRegisterRequest
+import com.example.gun_app_kotlin.network.LinenRegisterResponse
 import com.example.gun_app_kotlin.network.LoginRequest
 import com.example.gun_app_kotlin.network.LoginResponse
 import com.example.gun_app_kotlin.network.RegisterRequest
@@ -157,6 +159,10 @@ class LinenRepository(
             e.printStackTrace()
             throw e // Re-throw so the ViewModel can handle the error
         }
+    }
+
+    suspend fun registerLinens(request: LinenRegisterRequest): LinenRegisterResponse {
+        return apiService.registerLinens(request)
     }
 
     suspend fun clearCache() {

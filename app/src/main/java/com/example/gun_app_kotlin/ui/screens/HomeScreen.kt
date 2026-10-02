@@ -367,6 +367,15 @@ fun HomeScreen(
                         enabled = !uiState.isSyncing
                 )
 
+                IndustrialMenuCard(
+                        icon = Icons.Default.AddCircle,
+                        title = "Registrasi EPC",
+                        subtitle = "Batch registrasi linen baru",
+                        accentColor = Color(0xFFFF7043),
+                        onClick = { navController.navigate("epc_register_screen") },
+                        enabled = !uiState.isSyncing
+                )
+
                 Spacer(Modifier.height(20.dp))
 
                 // ── Section Label ──

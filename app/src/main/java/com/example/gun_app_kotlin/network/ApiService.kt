@@ -61,6 +61,29 @@ data class RegisterRequest(
     val name: String
 )
 
+data class LinenRegisterRequest(
+    @SerializedName("linen_id") val linenId: String,
+    @SerializedName("linen_type") val linenType: String,
+    @SerializedName("linen_height") val linenHeight: Int,
+    @SerializedName("linen_width") val linenWidth: Int,
+    @SerializedName("linen_length") val linenLength: Int,
+    @SerializedName("linen_max_cycle") val linenMaxCycle: Int,
+    @SerializedName("linen_description") val linenDescription: String,
+    @SerializedName("linen_created_date") val linenCreatedDate: String,
+    @SerializedName("linen_size_category") val linenSizeCategory: String,
+    @SerializedName("linen_weight") val linenWeight: Double,
+    @SerializedName("linen_material") val linenMaterial: String,
+    @SerializedName("linen_supplier") val linenSupplier: String,
+    @SerializedName("linen_budget_source") val linenBudgetSource: String,
+    @SerializedName("operator_username") val operatorUsername: String,
+    @SerializedName("epc_list") val epcList: List<String>
+)
+
+data class LinenRegisterResponse(
+    @SerializedName("inserted_epcs") val insertedEpcs: List<String>,
+    @SerializedName("skipped_existing_epcs") val skippedExistingEpcs: List<String>
+)
+
 data class User(
     val username: String,
     val name: String
@@ -99,6 +122,6 @@ interface ApiService {
     @POST("api/batch-usage")
     suspend fun executeBatchUsage(@Body request: BatchUsageRequest)
 
-
-
+    @POST("api/linens/register-batch")
+    suspend fun registerLinens(@Body request: LinenRegisterRequest): LinenRegisterResponse
 }
